@@ -116,8 +116,9 @@ str(bdata <- list(
   siteDS = siteDS, # Site number of each observation  
   A_DS = A_DS, # Area associated with the DS data
   delta = delta, # Bin width
-  DSduration = rep(5, nsites_DS), # Survey duration  
+  DSduration = rep(5, nsites_DS), # Survey duration 
   # Covariates on abundance
+  year_DS = sitecovs$Year-10, # year number
   habitat_DS = ((sitecovs$CanopyCover_315[order(sitecovs$sitenr)])-50)/100, # Habitat covariate; scale so that 0 = -0.5, 50 = 0, 100 = 0.5 ### Changed, NS 23.12.20
   elev_DS = (sitecovs$Elevation_mean315[order(sitecovs$sitenr)]-mean.elev)/sd.elev,
   # Covariates on detectability
@@ -130,8 +131,9 @@ str(bdata <- list(
   ### PC data set:
   nsites_PC = nsites_PC, # Number of sites
   counts = counts, # Counts
-  ebirdDuration = PC$duration,  
+  ebirdDuration = PC$duration,
   # Covariates on abundance
+  year_PC = PC$year-10, # year number
   habitat_PC = ((PC$CanopyCover_315)-50)/100, # Habitat covariate
   elev_PC = (PC$Elevation_mean315-mean.elev)/sd.elev,
   # Covariates on detectability
@@ -146,6 +148,7 @@ str(bdata <- list(
   y = 1*(DND$count>0), # DND
   DNDduration = DND$duration,  
   # Covariates on abundance
+  year_DND = DND$year-10, # year number
   habitat_DND = ((DND$CanopyCover_315)-50)/100, # Habitat covariate
   elev_DND = (DND$Elevation_mean315-mean.elev)/sd.elev,
   # Covariates on detectability
@@ -159,7 +162,8 @@ str(bdata <- list(
   fullDistance = fullDistance, # Assumed radius for PC
   nDfull = nDfull, # length of (latent) distance bins in PC data
   midptFull = midptFull, # Midpoints of (latent) distance bins
-  A_PC_DND = A_PC_DND # Area associated with the PC and DND data
+  A_PC_DND = A_PC_DND, # Area associated with the PC and DND data
+  nyear = length(unique(c(DND$year,PC$year,DS$Year))) # number of years in data
 
 ))
  
@@ -183,7 +187,14 @@ cat(file="IDS3_CaseStudy.txt","
       gamma4 ~ dnorm(0, 0.1)  # Effect of time of day on singing rate (quadratic)
 
       # Shared parameters in the abundance model
-      beta0 ~ dnorm(0, 0.01)  # Abundance intercept
+      # Random intercept:
+      for (i in 1:nyear) {
+        ann.beta0[i] ~ dnorm(beta0, tau.beta0)
+      }
+      beta0 ~ dnorm(0, 0.01)
+      tau.beta0 <- pow(sd.beta0,-2) 
+      sd.beta0 ~ dunif(0,10)
+      # Covariates:
       beta1 ~ dnorm(0, 0.01)  # Effect of habitat (canopy cover) on abundance
       beta2 ~ dnorm(0, 0.01)  # Effect of habitat (canopy cover) on abundance (quadratic)
       beta3 ~ dnorm(0, 0.01)  # Effect of elevation on abundance
@@ -213,7 +224,7 @@ cat(file="IDS3_CaseStudy.txt","
         
         ### Log-linear models on abundance, detectability and availability
         # Abundance
-        log(lambda1[s]) <- beta0 + beta1 * habitat_DS[s] + beta2 * pow(habitat_DS[s],2) + beta3 * elev_DS[s] + beta4 * pow(elev_DS[s],2) # Log-linear model for abundance 
+        log(lambda1[s]) <- ann.beta0[year_DS[s]] + beta1 * habitat_DS[s] + beta2 * pow(habitat_DS[s],2) + beta3 * elev_DS[s] + beta4 * pow(elev_DS[s],2) # Log-linear model for abundance 
         
         # Detectability
         log(sigma[s]) <- alpha0 + alpha1 * cancovdetect_DS[s] + alpha2 * urbandetect_DS[s]   # Log-Linear model for detection probability
@@ -259,7 +270,7 @@ cat(file="IDS3_CaseStudy.txt","
         
         ### Log-linear models on abundance, detectability and availability
         # Abundance
-        log(lambda2[s]) <- beta0 + beta1 * habitat_PC[s] + beta2 * pow(habitat_PC[s],2) + beta3 * elev_PC[s] + beta4 * pow(elev_PC[s],2) # Log-linear model on abundance 
+        log(lambda2[s]) <- ann.beta0[year_PC[s]] + beta1 * habitat_PC[s] + beta2 * pow(habitat_PC[s],2) + beta3 * elev_PC[s] + beta4 * pow(elev_PC[s],2) # Log-linear model on abundance 
     
         # Detectability
         log(sigmaPC[s]) <- alpha0 + alpha1 * cancovdetect_PC[s] + alpha2 * urbandetect_PC[s] # Log-Linear model for detection probability
@@ -291,7 +302,7 @@ cat(file="IDS3_CaseStudy.txt","
         
         ### Log-linear models on abundance, detectability and availability
         # Abundance
-        log(lambda3[s]) <- beta0 + beta1 * habitat_DND[s] + beta2 * pow(habitat_DND[s],2) + beta3 * elev_DND[s] + beta4 * pow(elev_DND[s],2) # Log-linear model on abundance 
+        log(lambda3[s]) <- ann.beta0[year_DND[s]] + beta1 * habitat_DND[s] + beta2 * pow(habitat_DND[s],2) + beta3 * elev_DND[s] + beta4 * pow(elev_DND[s],2) # Log-linear model on abundance 
         
         # Detectability
         log(sigmaDND[s]) <- alpha0 + alpha1 * cancovdetect_DND[s] + alpha2 * urbandetect_DND[s] # Log-Linear model for detection probability
@@ -324,10 +335,10 @@ inits <- function(){list(alpha0 = rnorm(1, 0, 0.1), alpha1 = rnorm(1, 0, 0.1), a
 # Params to save
 params <- c("alpha0", "alpha1", "alpha2", 
             "gamma0", "gamma1", "gamma2", "gamma3", "gamma4", 
-            "beta0", "beta1", "beta2", "beta3", "beta4")
+            "beta0", "beta1", "beta2", "beta3", "beta4","sd.beta0","ann.beta0")
 
 # MCMC settings
-na <- 10  ;  nc <- 3  ;  ni <- 12  ;  nb <- 2  ;  nt <- 2 # xx test
+na <- 10  ;  nc <- 3  ;  ni <- 12  ;  nb <- 2  ;  nt <- 2 # test, 30 sec
 #na <- 1000;  nc <- 3;  ni <- 2000;  nb <- 1000;  nt <- 3 # 54 min
 #na <- 1000;  nc <- 3;  ni <- 20000;  nb <- 10000;  nt <- 5 # 4.8 hrs
 
@@ -335,6 +346,7 @@ na <- 10  ;  nc <- 3  ;  ni <- 12  ;  nb <- 2  ;  nt <- 2 # xx test
 # Launch
 library(jagsUI)
 start <- Sys.time()
+set.seed(123)
 out <- jags(bdata, inits, params, "IDS3_CaseStudy.txt", n.adapt = na,
              n.chains = nc, n.iter = ni, n.burnin = nb, n.thin = nt,parallel = TRUE)
 difftime(Sys.time(),start)
@@ -395,6 +407,7 @@ centroids.predictions.output_rast <- mask(centroids.predictions.output_rast, vec
 plot(centroids.predictions.output_rast,main="Estimates based on jags analysis")
 
 # Analysis in unmarked ----
+# (no annual random effects on abundance; replace "IDS3_CaseStudy.txt" by "IDS3_CaseStudy_no_year_effects.txt" on line 350 to fit a (jags) model equivalent to the one in unmarked)
 
 # Install dev version of unmarked that has IDS() function
 # this only needs to be run once

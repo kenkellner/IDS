@@ -1,0 +1,151 @@
+
+    model{
+      
+      # Priors for parameters
+      # -------------------------------------------------------------------
+      # Separate parameters in the perceptibility component of the detection model
+      alpha0 ~ dnorm(0, 0.01)    # For proper DS data set
+      alpha1 ~ dnorm(0, 0.01)    # Canopy cover
+      alpha2 ~ dnorm(0, 0.01)    # Urban area
+
+      # Shared parameters in the availability component of the detection model
+      gamma0 ~ dnorm(0, 0.1)  # Singing rate intercept
+      gamma1 ~ dnorm(0, 0.1)  # Effect of day of year on singing rate
+      gamma2 ~ dnorm(0, 0.1)  # Effect of day of year on singing rate (quadratic)
+      gamma3 ~ dnorm(0, 0.1)  # Effect of time of day on singing rate
+      gamma4 ~ dnorm(0, 0.1)  # Effect of time of day on singing rate (quadratic)
+
+      # Shared parameters in the abundance model
+      # Random intercept:
+      for (i in 1:nyear) {
+        ann.beta0[i] ~ dnorm(beta0, tau.beta0)
+      }
+      beta0 ~ dnorm(0, 0.01)
+      tau.beta0 <- pow(sd.beta0,-2) 
+      sd.beta0 ~ dunif(0,100)
+      # Covariates:
+      beta1 ~ dnorm(0, 0.01)  # Effect of habitat (canopy cover) on abundance
+      beta2 ~ dnorm(0, 0.01)  # Effect of habitat (canopy cover) on abundance (quadratic)
+      beta3 ~ dnorm(0, 0.01)  # Effect of elevation on abundance
+      beta4 ~ dnorm(0, 0.01)  # Effect of elevation on abundance (quadratic)
+      
+      
+      # Submodel for the DS data
+      # -------------------------------------------------------------------
+      # Hierarchical construction of the likelihood
+      # Model for binned distance observations of every detected individual
+      for(i in 1:nind){       # Loop over all detected individuals
+        dclass[i] ~ dcat(fc[siteDS[i],])               # Part 1 of HM
+      }
+      
+      # Construction of the cell probabilities for the nD distance bands
+      # This is for the truncation distance for the DS data (here, 0.3)
+
+      for(s in 1:nsites_DS){    # Loop over all sites in data set 1
+        for(g in 1:nD){       # midpt = mid-point of each distance band
+          log(p[s,g]) <- -midpt[g] * midpt[g] / (2 * sigma[s]^2)
+          pi[s,g] <- ((2 * midpt[g] ) / newB^2) * delta # prob. per interval
+          f[s,g] <- p[s,g] * pi[s,g]
+          fc[s,g] <- f[s,g] / pcap[s]
+        }
+        # Rectangular approx. of integral that yields the Pr(capture)
+        pcap[s] <- sum(f[s,])
+        
+        ### Log-linear models on abundance, detectability and availability
+        # Abundance
+        log(lambda1[s]) <- ann.beta0[year_DS[s]] + beta1 * habitat_DS[s] + beta2 * pow(habitat_DS[s],2) + beta3 * elev_DS[s] + beta4 * pow(elev_DS[s],2) # Log-linear model for abundance 
+        
+        # Detectability
+        log(sigma[s]) <- alpha0 + alpha1 * cancovdetect_DS[s] + alpha2 * urbandetect_DS[s]   # Log-Linear model for detection probability
+
+        # Availability
+        log(phi[s]) <- gamma0 + gamma1 * day_DS[s] + gamma2 * pow(day_DS[s],2) + gamma3 * time_DS[s] + gamma4 * pow(time_DS[s],2)  # Log-linear model for availability
+        theta[s] <- 1-exp(-DSduration[s]*phi[s])  # Effect of duration on availability
+
+        # Multiply availability with detection probability
+        pDS[s] <- pcap[s] * theta[s]
+
+        ### Binomial mixture part (in conditional multinomial specification)
+        ncap[s] ~ dbin(pDS[s], N1[s])  # Part 2 of HM: number captured
+        N1[s] ~ dpois(A_DS * lambda1[s]) 
+
+      }
+      
+      # Submodel for the PC data
+      # -----------------------------------------
+      # Parameters on abundance, availability and detectability are al shared among the submodels for the different data sets
+      # Note, though, that since we're modeling ABUNDANCE as basic parameter in
+      # the state model, and NOT density, we must accommodate
+      # the different areas to which the parameters of the abundance model
+      # in the two data sets pertain. 
+      # We do this with the 'N.scaling' proportionality (this is an offset).
+      
+      # Likelihood for the PC data
+      # Note the exp(offset) equal to 'N.scaling', which is the ratio 
+      # A_PC(eBird) / A_DS
+      # Parameters on abundance are shared among all three submodels (DS, PC, DND), parameters on sigma are shared among PC and DND
+      
+      for(s in 1:nsites_PC){
+        
+        # Now we compute the average p over all distance bands for the unlimited-distance surveys
+        
+        for(g in 1:nDfull){       # midpt = mid-point of each distance band
+          log(p2[s,g]) <- -midptFull[g] * midptFull[g] / (2 * sigmaPC[s]^2)
+          pi2[s,g] <- ((2 * midptFull[g] ) / fullDistance^2) * delta # prob. per interval
+          f2[s,g] <- p2[s,g] * pi2[s,g]
+        }
+        # Rectangular approx. of integral that yields the Pr(capture)
+        pcap2[s] <- sum(f2[s,])
+        
+        ### Log-linear models on abundance, detectability and availability
+        # Abundance
+        log(lambda2[s]) <- ann.beta0[year_PC[s]] + beta1 * habitat_PC[s] + beta2 * pow(habitat_PC[s],2) + beta3 * elev_PC[s] + beta4 * pow(elev_PC[s],2) # Log-linear model on abundance 
+    
+        # Detectability
+        log(sigmaPC[s]) <- alpha0 + alpha1 * cancovdetect_PC[s] + alpha2 * urbandetect_PC[s] # Log-Linear model for detection probability
+        
+        # Availability
+        log(phi2[s]) <- gamma0 + gamma1 * day_PC[s] + gamma2 * pow(day_PC[s],2) + gamma3 * time_PC[s] + gamma4 * pow(time_PC[s],2) 
+        theta2[s] <- 1-exp(-ebirdDuration[s]*phi2[s]) # Effect of duration on availability
+
+        # Multiply availability with detection probability
+        pPC[s] <- pcap2[s] * theta2[s] 
+
+        ### Binomial mixture part 
+        N2[s] ~ dpois(A_PC_DND * lambda2[s])
+        counts[s] ~ dbinom(pPC[s], N2[s]) 
+      }
+
+      # Submodel for the DND data
+      # -----------------------------------------
+      for(s in 1:nsites_DND){
+        # Again, we compute the average p over all distance bands for the unlimited-distance surveys
+
+        for(g in 1:nDfull){       # midpt = mid-point of each distance band
+          log(p3[s,g]) <- -midptFull[g] * midptFull[g] / (2 * sigmaDND[s]^2)
+          pi3[s,g] <- ((2 * midptFull[g] ) / fullDistance^2) * delta # prob. per interval
+          f3[s,g] <- p3[s,g] * pi3[s,g]
+        }
+        # Rectangular approx. of integral that yields the Pr(capture)
+        pcap3[s] <- sum(f3[s,])
+        
+        ### Log-linear models on abundance, detectability and availability
+        # Abundance
+        log(lambda3[s]) <- ann.beta0[year_DND[s]] + beta1 * habitat_DND[s] + beta2 * pow(habitat_DND[s],2) + beta3 * elev_DND[s] + beta4 * pow(elev_DND[s],2) # Log-linear model on abundance 
+        
+        # Detectability
+        log(sigmaDND[s]) <- alpha0 + alpha1 * cancovdetect_DND[s] + alpha2 * urbandetect_DND[s] # Log-Linear model for detection probability
+        
+        # Availability
+        log(phi3[s]) <- gamma0 + gamma1 * day_DND[s] + gamma2 * pow(day_DND[s],2) + gamma3 * time_DND[s] + gamma4 * pow(time_DND[s],2) 
+        theta3[s] <- 1-exp(-DNDduration[s]*phi3[s]) # Effect of duration on availability
+
+        # Temporal scaling based on duration
+        pDND[s] <- pcap3[s] * theta3[s] 
+
+        ### Royle-Nichols part
+        N3[s] ~ dpois(A_PC_DND * lambda3[s])
+        y[s] ~ dbern(1 - (1 - pDND[s])^N3[s])
+      }
+    }
+    
