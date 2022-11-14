@@ -1,9 +1,10 @@
 #----------------------------------------------------------------
 # Kéry et al. 2022: Integrated distance sampling models for simple point counts 
 # Case study
-# Analyse Distance Sampling (DS) data from Oregon2020 together with EBird Point Count (PC) data and detection/nondetection (DND) data 
+# Analyse Distance Sampling (DS) data from Oregon2020 together with 
+# EBird Point Count (PC) data and detection/nondetection (DND) data 
 # Marc Kéry, Nicolas Strebel, Tyler Hallman, Kenneth F. Kellner
-# March 2022 
+# March-November 2022 
 #---------------------------------------------------------------
 
 # Load data ----
@@ -167,38 +168,48 @@ str(bdata <- list(
 
 ))
  
+ 
 
+# In this model we add random noise in the detection function of the PC/DND data
 # Model
-cat(file="IDS3_CaseStudy.txt","
+cat(file="IDS3_CaseStudy_5.txt","
     model{
       
-      # Priors for parameters
+      # Priors for all parameters in IDS model
       # -------------------------------------------------------------------
-      # Separate parameters in the perceptibility component of the detection model
-      alpha0 ~ dnorm(0, 0.01)    # For proper DS data set
-      alpha1 ~ dnorm(0, 0.01)    # Canopy cover
-      alpha2 ~ dnorm(0, 0.01)    # Urban area
+      # Partly different parameters in the detectabiliperceptibility component 
+	  # of the detection model for the DS and the PC/DND portions of the data
+      for(d in 1:2){           # d indexes the two data types: DS vs. PC/DND
+        alpha0[d] <- log(mean.sigma[d])  # sigma intercept on log scale and ...
+        mean.sigma[d] ~ dunif(0, 0.1) # ... on natural scale
+        tau.eps[d] <- pow(sd.eps[d], -2)
+		sd.eps[d] ~ dunif(0, 1)
+      }
+      alpha1 ~ dnorm(0, 1)     # Canopy cover
+      alpha2 ~ dnorm(0, 1)     # Urban area
 
       # Shared parameters in the availability component of the detection model
-      gamma0 ~ dnorm(0, 0.1)  # Singing rate intercept
-      gamma1 ~ dnorm(0, 0.1)  # Effect of day of year on singing rate
-      gamma2 ~ dnorm(0, 0.1)  # Effect of day of year on singing rate (quadratic)
-      gamma3 ~ dnorm(0, 0.1)  # Effect of time of day on singing rate
-      gamma4 ~ dnorm(0, 0.1)  # Effect of time of day on singing rate (quadratic)
+      gamma0 <- log(mean.phi)  # phi intercept on log scale and ...
+      mean.phi ~ dunif(0, 1)   # ... on natural scale
+      gamma1 ~ dnorm(0, 0.5)   # Effect of day of year on singing rate
+      gamma2 ~ dnorm(0, 0.5)   # Effect of day of year on singing rate (quadratic)
+      gamma3 ~ dnorm(0, 1)     # Effect of time of day on singing rate
+      gamma4 ~ dnorm(0, 1)     # Effect of time of day on singing rate (quadratic)
 
       # Shared parameters in the abundance model
       # Random intercept:
       for (i in 1:nyear) {
         ann.beta0[i] ~ dnorm(beta0, tau.beta0)
       }
-      beta0 ~ dnorm(0, 0.01)
+      beta0 <- log(mean.lambda) # lambda intercept on log scale and ...
+      mean.lambda ~ dunif(0, 80) # ... on natural scale
       tau.beta0 <- pow(sd.beta0,-2) 
-      sd.beta0 ~ dunif(0,10)
+      sd.beta0 ~ dunif(0, 2)
       # Covariates:
-      beta1 ~ dnorm(0, 0.01)  # Effect of habitat (canopy cover) on abundance
-      beta2 ~ dnorm(0, 0.01)  # Effect of habitat (canopy cover) on abundance (quadratic)
-      beta3 ~ dnorm(0, 0.01)  # Effect of elevation on abundance
-      beta4 ~ dnorm(0, 0.01)  # Effect of elevation on abundance (quadratic)
+      beta1 ~ dnorm(0, 1)  # Effect of habitat (canopy cover) on abundance
+      beta2 ~ dnorm(0, 0.1)  # Effect of habitat (canopy cover) on abundance (quadratic)
+      beta3 ~ dnorm(0, 1)  # Effect of elevation on abundance
+      beta4 ~ dnorm(0, 1)  # Effect of elevation on abundance (quadratic)
       
       
       # Submodel for the DS data
@@ -210,7 +221,7 @@ cat(file="IDS3_CaseStudy.txt","
       }
       
       # Construction of the cell probabilities for the nD distance bands
-      # This is for the truncation distance for the DS data (here, 0.3)
+      # This is for the truncation distance for the DS data (here, newB = 0.3 km)
 
       for(s in 1:nsites_DS){    # Loop over all sites in data set 1
         for(g in 1:nD){       # midpt = mid-point of each distance band
@@ -222,14 +233,15 @@ cat(file="IDS3_CaseStudy.txt","
         # Rectangular approx. of integral that yields the Pr(capture)
         pcap[s] <- sum(f[s,])
         
-        ### Log-linear models on abundance, detectability and availability
-        # Abundance
+        ### Log-linear models on abundance, detectability, and availability
+        # Abundance (lambda)
         log(lambda1[s]) <- ann.beta0[year_DS[s]] + beta1 * habitat_DS[s] + beta2 * pow(habitat_DS[s],2) + beta3 * elev_DS[s] + beta4 * pow(elev_DS[s],2) # Log-linear model for abundance 
         
-        # Detectability
-        log(sigma[s]) <- alpha0 + alpha1 * cancovdetect_DS[s] + alpha2 * urbandetect_DS[s]   # Log-Linear model for detection probability
+        # Detectability/perceptability (sigma)
+        log(sigma[s]) <- alpha0[1] + alpha1 * cancovdetect_DS[s] + alpha2 * urbandetect_DS[s] + eps1[s]  # Log-Linear model for detection probability
+		    eps1[s] ~ dnorm(0, tau.eps[1])
 
-        # Availability
+        # Availability (phi)
         log(phi[s]) <- gamma0 + gamma1 * day_DS[s] + gamma2 * pow(day_DS[s],2) + gamma3 * time_DS[s] + gamma4 * pow(time_DS[s],2)  # Log-linear model for availability
         theta[s] <- 1-exp(-DSduration[s]*phi[s])  # Effect of duration on availability
 
@@ -238,23 +250,30 @@ cat(file="IDS3_CaseStudy.txt","
 
         ### Binomial mixture part (in conditional multinomial specification)
         ncap[s] ~ dbin(pDS[s], N1[s])  # Part 2 of HM: number captured
-        N1[s] ~ dpois(A_DS * lambda1[s]) 
+        N1[s] ~ dpois(A_DS * lambda1[s])  # Note use of A_DS as an offset
 
-      }
+		# Assess model fit: compute Bayesian p-value for Freeman-Tukey discrepancy
+        # Compute fit statistic for observed data (DS data portion)
+        evalDS[s] <- pDS[s] * N1[s]
+        EDS[s] <- pow((sqrt(ncap[s]) - sqrt(evalDS[s])), 2)
+
+        # Generate replicate DS count data and compute same fit stats for them
+        ncap.new[s] ~ dbin(pDS[s], N1[s])
+        EDS.new[s] <- pow((sqrt(ncap.new[s]) - sqrt(evalDS[s])), 2)
+	   }
+      # Add up fit stats across sites for DS data
+      fitDS <- sum(EDS[])
+      fitDS.new <- sum(EDS.new[])
       
       # Submodel for the PC data
       # -----------------------------------------
-      # Parameters on abundance, availability and detectability are al shared among the submodels for the different data sets
-      # Note, though, that since we're modeling ABUNDANCE as basic parameter in
-      # the state model, and NOT density, we must accommodate
-      # the different areas to which the parameters of the abundance model
-      # in the two data sets pertain. 
-      # We do this with the 'N.scaling' proportionality (this is an offset).
+      # Parameters on abundance, availability and detectability 
+	  # are al shared among the submodels for the different data sets
+      # For spatial reconciliation of the data, we use A as an offset
       
       # Likelihood for the PC data
-      # Note the exp(offset) equal to 'N.scaling', which is the ratio 
-      # A_PC(eBird) / A_DS
-      # Parameters on abundance are shared among all three submodels (DS, PC, DND), parameters on sigma are shared among PC and DND
+      # Parameters on abundance are shared among all three submodels (DS, PC, DND),
+      #	parameters on sigma are shared among PC and DND
       
       for(s in 1:nsites_PC){
         
@@ -273,8 +292,9 @@ cat(file="IDS3_CaseStudy.txt","
         log(lambda2[s]) <- ann.beta0[year_PC[s]] + beta1 * habitat_PC[s] + beta2 * pow(habitat_PC[s],2) + beta3 * elev_PC[s] + beta4 * pow(elev_PC[s],2) # Log-linear model on abundance 
     
         # Detectability
-        log(sigmaPC[s]) <- alpha0 + alpha1 * cancovdetect_PC[s] + alpha2 * urbandetect_PC[s] # Log-Linear model for detection probability
-        
+        log(sigmaPC[s]) <- alpha0[2] + alpha1 * cancovdetect_PC[s] + alpha2 * urbandetect_PC[s] +eps2[s]# Log-Linear model for detection probability
+        eps2[s] ~ dnorm(0, tau.eps[2])
+
         # Availability
         log(phi2[s]) <- gamma0 + gamma1 * day_PC[s] + gamma2 * pow(day_PC[s],2) + gamma3 * time_PC[s] + gamma4 * pow(time_PC[s],2) 
         theta2[s] <- 1-exp(-ebirdDuration[s]*phi2[s]) # Effect of duration on availability
@@ -285,7 +305,19 @@ cat(file="IDS3_CaseStudy.txt","
         ### Binomial mixture part 
         N2[s] ~ dpois(A_PC_DND * lambda2[s])
         counts[s] ~ dbinom(pPC[s], N2[s]) 
-      }
+		
+		# Assess model fit: compute Bayesian p-value for Freeman-Tukey discrepancy
+        # Compute fit statistic for observed data (PC portion)
+        evalPC[s] <- pPC[s] * N2[s]
+        EPC[s] <- pow((sqrt(counts[s]) - sqrt(evalPC[s])), 2)
+
+        # Generate replicate point count data and compute same fit stats for them
+        counts.new[s] ~ dbin(pPC[s], N2[s])
+        EPC.new[s] <- pow((sqrt(counts.new[s]) - sqrt(evalPC[s])), 2)
+	   }
+      # Add up fit stats across sites for PC data
+      fitPC <- sum(EPC[])
+      fitPC.new <- sum(EPC.new[])
 
       # Submodel for the DND data
       # -----------------------------------------
@@ -305,7 +337,8 @@ cat(file="IDS3_CaseStudy.txt","
         log(lambda3[s]) <- ann.beta0[year_DND[s]] + beta1 * habitat_DND[s] + beta2 * pow(habitat_DND[s],2) + beta3 * elev_DND[s] + beta4 * pow(elev_DND[s],2) # Log-linear model on abundance 
         
         # Detectability
-        log(sigmaDND[s]) <- alpha0 + alpha1 * cancovdetect_DND[s] + alpha2 * urbandetect_DND[s] # Log-Linear model for detection probability
+        log(sigmaDND[s]) <- alpha0[2] + alpha1 * cancovdetect_DND[s] + alpha2 * urbandetect_DND[s] + eps3[s]# Log-Linear model for detection probability
+        eps3[s] ~ dnorm(0, tau.eps[2])
         
         # Availability
         log(phi3[s]) <- gamma0 + gamma1 * day_DND[s] + gamma2 * pow(day_DND[s],2) + gamma3 * time_DND[s] + gamma4 * pow(time_DND[s],2) 
@@ -317,7 +350,20 @@ cat(file="IDS3_CaseStudy.txt","
         ### Royle-Nichols part
         N3[s] ~ dpois(A_PC_DND * lambda3[s])
         y[s] ~ dbern(1 - (1 - pDND[s])^N3[s])
+
+		# Assess model fit: DND are binary data, so have to aggregate
+		# Compute the observed and expected number of sites with detections
+		# and treat that as a fit statistics for the DND portion of the data
+        y.new[s] ~ dbern(1 - (1 - pDND[s])^N3[s])    # Create replicate data sets
       }
+      # Add up fit stats across sites for DND data
+      fitDND <- sum(y[])
+      fitDND.new <- sum(y.new[])
+
+      # Compute Bayesian p-value for all three portions of the data
+      bpvDS <- step(fitDS.new - fitDS)
+      bpvPC <- step(fitPC.new - fitPC)
+      bpvDND <- step(fitDND.new - fitDND)
     }
     ")
 
@@ -325,90 +371,99 @@ cat(file="IDS3_CaseStudy.txt","
 Nst1 <- ncap + 1
 Nst2 <- counts + 1
 Nst3 <- 1*(DND$count>0) + 1
-inits <- function(){list(alpha0 = rnorm(1, 0, 0.1), alpha1 = rnorm(1, 0, 0.1), alpha2 = rnorm(1, 0, 0.1), 
-                         gamma0 = rnorm(1, 0, 0.1), gamma1 = rnorm(1, 0, 0.1), gamma2 = rnorm(1, 0, 0.1), 
+inits <- function(){list(mean.sigma = runif(2, 0, 0.1), alpha1 = rnorm(1, 0, 0.1), alpha2 = rnorm(1, 0, 0.1), 
+                         mean.phi = runif(1, 0, 1), gamma1 = rnorm(1, 0, 0.1), gamma2 = rnorm(1, 0, 0.1), 
                          gamma3 = rnorm(1, 0, 0.1), gamma4 = rnorm(1, 0, 0.1),
-                         beta0 = rnorm(1, 0, 0.1), beta1 = rnorm(1, 0, 0.1), beta2 = rnorm(1, 0, 0.1), 
+                         mean.lambda = runif(1, 1, 60), beta1 = rnorm(1, 0, 0.1), beta2 = rnorm(1, 0, 0.1), 
                          beta3 = rnorm(1, 0, 0.1), beta4 = rnorm(1, 0, 0.1), 
-                         N1 = Nst1, N2 = Nst2, N3 = Nst3)}  
+						 sd.eps = runif(2, 1, 2), N1 = Nst1, N2 = Nst2, N3 = Nst3)}  
 
 # Params to save
-params <- c("alpha0", "alpha1", "alpha2", 
-            "gamma0", "gamma1", "gamma2", "gamma3", "gamma4", 
-            "beta0", "beta1", "beta2", "beta3", "beta4","sd.beta0","ann.beta0")
+params <- c("mean.sigma", "alpha0", "alpha1", "alpha2", "sd.eps",
+            "mean.phi", "gamma0", "gamma1", "gamma2", "gamma3", "gamma4", 
+            "mean.lambda", "beta0", "beta1", "beta2", "beta3", "beta4", "sd.beta0", "ann.beta0",
+			"fitDS", "fitDS.new", "fitPC", "fitPC.new", "fitDND", "fitDND.new", 
+			"bpvDS", "bpvPC", "bpvDND")
 
 # MCMC settings
 na <- 10  ;  nc <- 3  ;  ni <- 12  ;  nb <- 2  ;  nt <- 2 # test, 30 sec
-#na <- 1000;  nc <- 3;  ni <- 2000;  nb <- 1000;  nt <- 3 # 54 min
-#na <- 1000;  nc <- 3;  ni <- 20000;  nb <- 10000;  nt <- 5 # 4.8 hrs
+
+na <- 3000;  nc <- 3;  ni <- 15000;  nb <- 10000;  nt <- 5 # 393 min
+na <- 5000;  nc <- 3;  ni <- 60000;  nb <- 20000;  nt <- 40 # 660 min
+na <- 10000;  nc <- 4;  ni <- 120000;  nb <- 20000;  nt <- 100 # 1500 min
+
+na <- 10000;  nc <- 4;  ni <- 120000;  nb <- 60000;  nt <- 60
+
 
 # Launch JAGS, check convergence and summarize posteriors ----
 # Launch
 library(jagsUI)
 start <- Sys.time()
 set.seed(123)
-out <- jags(bdata, inits, params, "IDS3_CaseStudy.txt", n.adapt = na,
-             n.chains = nc, n.iter = ni, n.burnin = nb, n.thin = nt,parallel = TRUE)
+out5XX <- jags(bdata, inits, params, "IDS3_CaseStudy_5.txt", n.adapt = na,
+             n.chains = nc, n.iter = ni, n.burnin = nb, n.thin = nt, parallel = TRUE)
 difftime(Sys.time(),start)
-traceplot(out)
-print(out, 2) 
+traceplot(out5XX)
+print(out5XX, 2) 
 
-# Estimate abundance throughout study area for each sample ----
+# Visualize and summarize results  ----
+library(sf); library(terra)
+
 # Load environmental data
 head(centroids <- read.table("data/env_centroids.csv",header=T,sep=";",as.is = T))
+
+#load in file with desired crs
+polygon.grid <- st_read("data/geodata/grid_1km.shp")
+
+# mask for study area
+mask <- st_read("data/geodata/StudyArea.shp")
 
 # adjust variables as they were in the model data
 centroids$cancov.scaled <- (centroids$cancov - 50)/100
 centroids$elev.scaled <- (centroids$elev - mean.elev)/sd.elev
 
-# Create a function to do this
+# Create a function to make predictions based on model output
 predict.abundances <- function(environmental = environmental, parameters = parameters){
-
   prediction <- exp(parameters[1] + parameters[2] * environmental$cancov.scaled + parameters[3] * I(environmental$cancov.scaled^2) + 
-                                    parameters[4] * environmental$elev.scaled + parameters[5] * I(environmental$elev.scaled^2))
+                      parameters[4] * environmental$elev.scaled + parameters[5] * I(environmental$elev.scaled^2))
   return(prediction)
-  
 }
 
 # Extract model output samples as a matrix
-samples.matrix <- as.matrix(out$samples)
-
-# Predict
-centroids.predictions <- apply(samples.matrix[,9:13], 1, FUN = predict.abundances, environmental = centroids)
-
-# Select median
-centroids.predictions.median <- apply(centroids.predictions, 1, median)
-centroids.predictions.output <- cbind(centroids, centroids.predictions.median)
-
-# Calculate population estimate with credible intervals
-pop.estimates <- apply(centroids.predictions,2, sum)
-
-(mean.pop.estimate <- mean(pop.estimates))
-(uci.pop.estimate <- quantile(pop.estimates, probs = 0.975))
-(lci.pop.estimate <- quantile(pop.estimates, probs = 0.025))
-
-# Plot predictions per km2 ----
-library(sf); library(terra)
-
-#load in file with desired crs
-polygon.grid <- st_read("data/geodata/grid_1km.shp")
-
-mask <- st_read("data/geodata/StudyArea.shp")
-
-centroids.predictions.output_sf = st_as_sf(centroids.predictions.output, coords = c("X", "Y"), crs = st_crs(polygon.grid))
-
+samples.matrix <- as.matrix(out5XX$samples)
 test.raster <- rast(nlyrs=1, crs = crs(vect(polygon.grid)), extent = ext(polygon.grid), resolution = 1000)
 
-centroids.predictions.output_rast <- rasterize(vect(centroids.predictions.output_sf), test.raster, field = "centroids.predictions.median")
-
-centroids.predictions.output_rast <- mask(centroids.predictions.output_rast, vect(mask)) # mask study area
+### Plot map
+centroids.predictions <- apply(samples.matrix[,16:20], 1, FUN = predict.abundances, environmental = centroids) # Make predictions for each km-square and iteration
+centroids.predictions <- cbind(centroids, med=apply(centroids.predictions,1,median))
+centroids.predictions.output_sf = st_as_sf(centroids.predictions, coords = c("X", "Y"), crs = st_crs(polygon.grid))
+centroids.predictions.output_rast <- rasterize(vect(centroids.predictions.output_sf), test.raster, field = "med")
+centroids.predictions.output_rast <- mask(centroids.predictions.output_rast, vect(mask)) 
 
 # Plot density map
 plot(centroids.predictions.output_rast,main="Estimates based on jags analysis")
 
-# Analysis in unmarked ----
-# (no annual random effects on abundance; replace "IDS3_CaseStudy.txt" by "IDS3_CaseStudy_no_year_effects.txt" on line 350 to fit a (jags) model equivalent to the one in unmarked)
+### Estimate abundance throughout study area for each sample
+# Select km-squares within study area 
+within.study.area <- !(is.na(values(centroids.predictions.output_rast)))
 
+# Make predictions for each km-square and iteration
+centroids.predictions <- apply(samples.matrix[,16:20], 1, FUN = predict.abundances, environmental = centroids[within.study.area,])
+
+# Summarize population estimates
+pop.estimates <- apply(centroids.predictions,2,sum)
+
+(mean.pop.estimate <- mean(pop.estimates)) # Mean for the entire study area
+(uci.pop.estimate <- quantile(pop.estimates, probs = 0.975)) # upper
+(lci.pop.estimate <- quantile(pop.estimates, probs = 0.025)) # lower
+
+round(range(apply(centroids.predictions,1,median)),1) # range of median estimates per km-square
+
+# Analysis in unmarked  ----
+# Difference of the model fitted in unmarked compared to IDS3_CaseStudy_5.txt:
+#  - no annual random effects on abundance, 
+#  - no different levels of heterogeneity in the detection functions estimated for different portions of the data 
+# replace "IDS3_CaseStudy_5.txt" by "IDS3_CaseStudy_simple.txt" on line 403 to fit a (jags) model equivalent to the one in unmarked
 # Install dev version of unmarked that has IDS() function
 # this only needs to be run once
 # this requires Rtools to be installed if on Windows, and Xcode if on Mac
