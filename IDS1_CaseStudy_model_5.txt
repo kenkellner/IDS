@@ -1,0 +1,103 @@
+
+    model{
+      
+      for(d in 1:2){           # d indexes the two data types: DS vs. PC
+        alpha0[d] <- log(mean.sigma[d])  # sigma intercept on log scale and ...
+        mean.sigma[d] ~ dunif(0, 1)    # ... on the natural scale (0 - 1 km)
+        tau.eps[d] <- pow(sd.eps[d], -2)
+		    sd.eps[d] ~ dt(0, 1, 1)I(0,)     # Magnitude of that noise
+      }
+      alpha1 ~ dnorm(0, 1)     # Canopy cover
+      alpha2 ~ dnorm(0, 1)     # Urban area
+
+      gamma0 <- log(mean.phi)  # phi intercept on log scale and ...
+      mean.phi ~ dunif(0, 1)   # ... on natural scale
+      gamma1 ~ dnorm(0, 1)     # Effect of day of year on singing rate
+      gamma2 ~ dnorm(0, 1)     # Effect of day of year on singing rate (quadratic)
+      gamma3 ~ dnorm(0, 1)     # Effect of time of day on singing rate
+      gamma4 ~ dnorm(0, 1)     # Effect of time of day on singing rate (quadratic)
+
+      for (i in 1:nyear) {     # Loop over 7 years
+        ann.beta0[i] ~ dnorm(beta0, tau.beta0)
+      }
+      beta0 <- log(mean.lambda)  # lambda intercept on log scale and ...
+      mean.lambda ~ dnorm(0, 0.001)I(0,) # ... on natural scale
+      tau.beta0 <- pow(sd.beta0,-2) 
+      sd.beta0 ~ dt(0, 1, 2)I(0,) # Magnitude of noise in lambda intercept
+      beta1 ~ dnorm(0, 1)      # Effect of habitat (canopy cover) on abundance
+      beta2 ~ dnorm(0, 0.1)    # Effect of habitat (canopy cover) on abundance (quadratic)
+      beta3 ~ dnorm(0, 1)      # Effect of elevation on abundance
+      beta4 ~ dnorm(0, 1)      # Effect of elevation on abundance (quadratic)
+      
+      for(i in 1:nind){       # Loop over all detected individuals
+        dclass[i] ~ dcat(fc[siteDS[i],])               # Part 1 of HM
+      }
+      
+
+      for(s in 1:nsites_DS){  # Loop over all sites in data set 1
+        for(g in 1:nD){       # midpt = mid-point of each distance band
+          log(p[s,g]) <- -midpt[g] * midpt[g] / (2 * sigma[s]^2)
+          pi[s,g] <- ((2 * midpt[g] ) / newB^2) * delta # prob. per interval
+          f[s,g] <- p[s,g] * pi[s,g]
+          fc[s,g] <- f[s,g] / pcap[s]
+        }
+        pcap[s] <- sum(f[s,])
+        
+        log(lambda1[s]) <- ann.beta0[year_DS[s]] + beta1 * habitat_DS[s] + beta2 * pow(habitat_DS[s],2) + beta3 * elev_DS[s] + beta4 * pow(elev_DS[s],2) # Log-linear model for abundance 
+        
+        log(sigma[s]) <- alpha0[1] + alpha1 * cancovdetect_DS[s] + alpha2 * urbandetect_DS[s] + eps1[s]  # Log-Linear model for detection probability
+		      eps1[s] ~ dnorm(0, tau.eps[1])        # Note here eps1 has one precision and below another
+
+        log(phi[s]) <- gamma0 + gamma1 * day_DS[s] + gamma2 * pow(day_DS[s],2) + gamma3 * time_DS[s] + gamma4 * pow(time_DS[s],2)  # Log-linear model for availability
+        theta[s] <- 1-exp(-DSduration[s]*phi[s])  # Effect of duration on availability
+
+        pDS[s] <- pcap[s] * theta[s]
+
+        ncap[s] ~ dbin(pDS[s], N1[s])  # Part 2 of HM: number captured
+        N1[s] ~ dpois(A_DS * lambda1[s])  # Note use of A_DS as an offset
+
+        evalDS[s] <- pDS[s] * N1[s]
+        EDS[s] <- pow((sqrt(ncap[s]) - sqrt(evalDS[s])), 2)
+
+        ncap.new[s] ~ dbin(pDS[s], N1[s])
+        EDS.new[s] <- pow((sqrt(ncap.new[s]) - sqrt(evalDS[s])), 2)
+	   }
+      fitDS <- sum(EDS[])
+      fitDS.new <- sum(EDS.new[])
+      
+      
+      for(s in 1:nsites_PC){
+        
+        for(g in 1:nDfull){       # midpt = mid-point of each distance band
+          log(p2[s,g]) <- -midptFull[g] * midptFull[g] / (2 * sigmaPC[s]^2)
+          pi2[s,g] <- ((2 * midptFull[g] ) / fullDistance^2) * delta # prob. per interval
+          f2[s,g] <- p2[s,g] * pi2[s,g]
+        }
+        pcap2[s] <- sum(f2[s,])
+        
+        log(lambda2[s]) <- ann.beta0[year_PC[s]] + beta1 * habitat_PC[s] + beta2 * pow(habitat_PC[s],2) + beta3 * elev_PC[s] + beta4 * pow(elev_PC[s],2) # Log-linear model on abundance 
+    
+        log(sigmaPC[s]) <- alpha0[2] + alpha1 * cancovdetect_PC[s] + alpha2 * urbandetect_PC[s] + eps2[s] # Log-Linear model for detection probability
+        eps2[s] ~ dnorm(0, tau.eps[2])
+
+        log(phi2[s]) <- gamma0 + gamma1 * day_PC[s] + gamma2 * pow(day_PC[s],2) + gamma3 * time_PC[s] + gamma4 * pow(time_PC[s],2) 
+        theta2[s] <- 1-exp(-ebirdDuration[s]*phi2[s]) # Effect of duration on availability
+
+        pPC[s] <- pcap2[s] * theta2[s] 
+
+        N2[s] ~ dpois(A_PC * lambda2[s])
+        counts[s] ~ dbinom(pPC[s], N2[s]) 
+		
+        evalPC[s] <- pPC[s] * N2[s]
+        EPC[s] <- pow((sqrt(counts[s]) - sqrt(evalPC[s])), 2)
+
+        counts.new[s] ~ dbin(pPC[s], N2[s])
+        EPC.new[s] <- pow((sqrt(counts.new[s]) - sqrt(evalPC[s])), 2)
+	   }
+      fitPC <- sum(EPC[])
+      fitPC.new <- sum(EPC.new[])
+
+      bpvDS <- step(fitDS.new - fitDS)
+      bpvPC <- step(fitPC.new - fitPC)
+    }
+    
