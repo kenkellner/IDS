@@ -31,7 +31,7 @@ depends <- depends[! depends %in% c("graphics", "methods", "parallel", "stats", 
 install.packages(depends)
 
 # Install from Github
-remotes::install_github("kenkellner/unmarked", ref="IDS")
+remotes::install_github("rbchan/unmarked")
 
 # Load package
 library(unmarked)
