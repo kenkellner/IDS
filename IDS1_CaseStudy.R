@@ -404,9 +404,11 @@ writeRaster(centroids.predictions.output_rast, "IDS_AMRO_PredictedAbundance.tif"
 
 
 # Analysis in unmarked  ----
+# Because unmarked IDS() function doesn't support random effects we fit a different model
 # Difference of the model fitted in unmarked compared to IDS1_CaseStudy_5.txt:
 #  - no annual random effects on abundance, 
 #  - no different levels of heterogeneity in the detection functions estimated for different portions of the data 
+# The IDS function will be in unmarked on CRAN in mid-2024. Before then:
 # Install dev version of unmarked that has IDS() function
 # this only needs to be run once
 # this requires Rtools to be installed if on Windows, and Xcode if on Mac
