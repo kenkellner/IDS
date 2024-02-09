@@ -408,20 +408,9 @@ writeRaster(centroids.predictions.output_rast, "IDS_AMRO_PredictedAbundance.tif"
 # Difference of the model fitted in unmarked compared to IDS1_CaseStudy_5.txt:
 #  - no annual random effects on abundance, 
 #  - no different levels of heterogeneity in the detection functions estimated for different portions of the data 
-# The IDS function will be in unmarked on CRAN in mid-2024. Before then:
-# Install dev version of unmarked that has IDS() function
-# this only needs to be run once
-# this requires Rtools to be installed if on Windows, and Xcode if on Mac
-# First install dependencies. If you have problems with the code below,
-# make sure all these R packages are the latest CRAN versions, *especially* TMB
-depends <- tools::package_dependencies('unmarked')[[1]]
-depends <- depends[! depends %in% c("graphics", "methods", "parallel", "stats", "utils")]
-install.packages(depends)
-
-# Install from Github
-remotes::install_github("rbchan/unmarked")
 
 # Load package
+# Needs a version of unmarked with the IDS() function; see the README file in this folder.
 library(unmarked)
 
 # Format JAGS input data for use in unmarked
