@@ -1,6 +1,6 @@
 
 # Supporting Information for:
-# Kéry, M., Royle, J.A., Hallman, T., Robinson, W.D., Strebel, N., Kellner, K.F., 2023:
+# Kéry, M., Royle, J.A., Hallman, T., Robinson, W.D., Strebel, N., Kellner, K.F., 2024:
 # Integrated distance sampling models for simple point counts, Ecology.
 
 
@@ -518,7 +518,7 @@ mean.sigmaDND <- mean(sigmaDND) # Average sigma in DND surveys
   
   # Params to save
   params <- c("alpha0DS", "alpha0DND", "beta0", "mean.sigmaDS",
-    "mean.sigmaDND", "Ntotal1", "D1", "Ntotal1", "mean.lambda",
+    "mean.sigmaDND", "Ntotal1", "D1", "mean.lambda",
     "pbar1", "pbar2", "Ntotal2", "D2", "D", "N2")
   
   # MCMC settings

@@ -1,6 +1,6 @@
 
 # Supporting Information for:
-# Kéry, M., Royle, J.A., Hallman, T., Robinson, W.D., Strebel, N., Kellner, K.F., 2023:
+# Kéry, M., Royle, J.A., Hallman, T., Robinson, W.D., Strebel, N., Kellner, K.F., 2024:
 # Integrated distance sampling models for simple point counts, Ecology.
 
 

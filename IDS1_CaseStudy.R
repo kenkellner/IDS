@@ -1,5 +1,5 @@
 #----------------------------------------------------------------
-# Kéry et al. 2022/23: Integrated distance sampling models for simple point counts 
+# Kéry et al. 2024: Integrated distance sampling models for simple point counts 
 # Case study
 # Analyse Distance Sampling (DS) data from Oregon2020 together with 
 # EBird Point Count (PC) data 
