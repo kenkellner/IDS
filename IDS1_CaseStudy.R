@@ -294,7 +294,7 @@ cat(file="IDS1_CaseStudy_model_5.txt","
       fitPC <- sum(EPC[])
       fitPC.new <- sum(EPC.new[])
 
-      # Compute Bayesian p-value for all three portions of the data
+      # Compute Bayesian p-value for both portions of the data
       bpvDS <- step(fitDS.new - fitDS)
       bpvPC <- step(fitPC.new - fitPC)
     }
@@ -318,18 +318,7 @@ params <- c("mean.sigma", "alpha0", "alpha1", "alpha2", "sd.eps",
 
 # MCMC settings
 na <- 10  ;  nc <- 4  ;  ni <- 12  ;  nb <- 2  ;  nt <- 2 # test, 30 sec
-na <- 100  ;  nc <- 4  ;  ni <- 120  ;  nb <- 20  ;  nt <- 2 # test, 30 sec
-na <- 1000  ;  nc <- 4  ;  ni <- 1200  ;  nb <- 200 ;  nt <- 2 # test, 30 sec
-
-na <- 3000;  nc <- 4;  ni <- 15000;  nb <- 10000;  nt <- 5 # 393 min
-na <- 10000;  nc <- 4;  ni <- 120000;  nb <- 20000;  nt <- 100 # 1500 min
 na <- 10000;  nc <- 4;  ni <- 120000;  nb <- 60000;  nt <- 60   # As for the paper
-
-na <- 5000;  nc <- 4;  ni <- 60000;  nb <- 30000;  nt <- 30 # 660 min
-na <- 10000;  nc <- 4;  ni <- 160000;  nb <- 80000;  nt <- 80 # 660 min
-
-na <- 10000;  nc <- 4;  ni <- 160000;  nb <- 80000;  nt <- 80 # 660 min
-
 na <- 10000;  nc <- 10;  ni <- 400000;  nb <- 200000;  nt <- 200 # takes a while...
 
 
