@@ -448,14 +448,16 @@ umf_PC <- unmarkedFramePCount(y=y_PC, siteCovs=site_covs_PC)
 
 #### Fit model ####
 
-(mod <- IDS(lambdaformula = ~habitat + I(habitat^2) + elev + I(elev^2),
+mod <- IDS(lambdaformula = ~habitat + I(habitat^2) + elev + I(elev^2),
            detformulaDS = ~cancov + urban,
            detformulaPC = NULL,
            dataDS = umf_DS, dataPC = umf_PC,
            availformula = ~day + I(day^2) + time + I(time^2),
            durationDS = dur_DS, durationPC = dur_PC, 
            maxDistPC = bdata$fullDistance, 
-           K=300, unitsOut='kmsq'))
+           K=300, unitsOut='kmsq')
+
+summary(mod)
 
 # Generate abundance map
 # requires 'plot predictions per km2' section from JAGS analysis earlier to have been run

@@ -6,7 +6,8 @@ Kéry M, Royle JA, Hallman T, Robinson WD, Strebel N, Kellner KF (2024). Integra
 
 The version of `unmarked` with the `IDS()` function used in the analyses below should be on CRAN sometime in mid-2024, but in the meantime a copy can be found in this repository, or [here](https://github.com/rbchan/unmarked).
 
-Until it's available on CRAN, this version of `unmarked` can be installed with this code:
+Until it's available on CRAN, this version of `unmarked` can be installed from the source package.
+This requires [RTools](https://cran.r-project.org/bin/windows/Rtools/) on Windows, or [Xcode](https://developer.apple.com/xcode/) on Mac.
 
 ```r
 depends <- tools::package_dependencies('unmarked')[[1]]
